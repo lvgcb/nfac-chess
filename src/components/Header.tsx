@@ -63,7 +63,14 @@ export function Header() {
             activeProps={{ className: "px-2 sm:px-3 py-1.5 rounded-md text-foreground bg-secondary" }}
             activeOptions={{ exact: true }}
           >
-            Play
+            Play AI
+          </Link>
+          <Link
+            to="/multiplayer"
+            className="px-2 sm:px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            activeProps={{ className: "px-2 sm:px-3 py-1.5 rounded-md text-foreground bg-secondary" }}
+          >
+            Multiplayer
           </Link>
           <Link
             to="/shop"

@@ -41,6 +41,72 @@ export type Database = {
         }
         Relationships: []
       }
+      matches: {
+        Row: {
+          black_id: string
+          black_name: string | null
+          created_at: string
+          fen: string
+          finished_at: string | null
+          id: string
+          moves: Json
+          result: string | null
+          status: string
+          updated_at: string
+          white_id: string
+          white_name: string | null
+          winner_id: string | null
+        }
+        Insert: {
+          black_id: string
+          black_name?: string | null
+          created_at?: string
+          fen?: string
+          finished_at?: string | null
+          id?: string
+          moves?: Json
+          result?: string | null
+          status?: string
+          updated_at?: string
+          white_id: string
+          white_name?: string | null
+          winner_id?: string | null
+        }
+        Update: {
+          black_id?: string
+          black_name?: string | null
+          created_at?: string
+          fen?: string
+          finished_at?: string | null
+          id?: string
+          moves?: Json
+          result?: string | null
+          status?: string
+          updated_at?: string
+          white_id?: string
+          white_name?: string | null
+          winner_id?: string | null
+        }
+        Relationships: []
+      }
+      matchmaking_queue: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           created_at: string
@@ -150,6 +216,15 @@ export type Database = {
       award_coins: {
         Args: { _amount: number; _metadata?: Json; _reason: string }
         Returns: number
+      }
+      finish_match: {
+        Args: { _match_id: string; _result: string }
+        Returns: undefined
+      }
+      join_matchmaking: { Args: never; Returns: string }
+      make_match_move: {
+        Args: { _fen: string; _match_id: string; _move_san: string }
+        Returns: undefined
       }
       purchase_shop_item: { Args: { _item_id: string }; Returns: string }
     }
