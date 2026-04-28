@@ -348,13 +348,33 @@ export function ChessBoard() {
     };
   }, [fen, turn, gameOver, difficulty, chess, applyMove]);
 
-  // Trigger end-game modal
+  // Trigger end-game modal + award coins
   useEffect(() => {
-    if (gameOver && !endHandled.current) {
-      endHandled.current = true;
-      setShowEndModal(true);
+    if (!gameOver || endHandled.current) return;
+    endHandled.current = true;
+    setShowEndModal(true);
+
+    if (!user) return;
+    // Determine outcome from white's perspective (player is white)
+    let amount = 0;
+    let reason = "";
+    if (chess.isCheckmate()) {
+      const winnerIsWhite = turn === "b"; // side to move lost
+      if (winnerIsWhite) {
+        amount = difficulty === "hard" ? 200 : difficulty === "medium" ? 100 : 50;
+        reason = `win_${difficulty}`;
+      } else {
+        amount = 0; // no coins for losing
+      }
+    } else if (chess.isDraw() || chess.isStalemate()) {
+      amount = 25;
+      reason = `draw_${difficulty}`;
     }
-  }, [gameOver]);
+    if (amount > 0) {
+      supabase.rpc("award_coins", { _amount: amount, _reason: reason, _metadata: {} })
+        .then(({ error }) => { if (!error) setCoinsAwarded(amount); });
+    }
+  }, [gameOver, user, chess, turn, difficulty]);
 
   const reset = () => {
     chess.reset();
@@ -369,8 +389,10 @@ export function ChessBoard() {
     setAnalysisError(null);
     setAnalysisMode(false);
     setAnalysisStep(0);
+    setCoinsAwarded(null);
     endHandled.current = false;
   };
+
 
   const runAnalysis = async () => {
     setShowEndModal(false);
