@@ -304,7 +304,7 @@ export function ChessBoard() {
   );
 
   const handleSquareClick = (sq: Square) => {
-    if (gameOver || thinking || turn !== playerColor) return;
+    if (analysisMode || gameOver || thinking || turn !== playerColor) return;
     const piece = chess.get(sq);
 
     if (selected) {
@@ -374,26 +374,17 @@ export function ChessBoard() {
     setHistory([]);
     setCaptured({ w: [], b: [] });
     setShowEndModal(false);
-    setShowCoach(false);
     setAnalysis(null);
     setAnalysisError(null);
+    setAnalysisMode(false);
+    setAnalysisStep(0);
     endHandled.current = false;
-  };
-
-  const undo = () => {
-    if (thinking) return;
-    chess.undo();
-    chess.undo();
-    setFen(chess.fen());
-    setSelected(null);
-    setLegalTargets([]);
-    setLastMove(null);
-    setHistory((h) => h.slice(0, Math.max(0, h.length - 2)));
   };
 
   const runAnalysis = async () => {
     setShowEndModal(false);
-    setShowCoach(true);
+    setAnalysisMode(true);
+    setAnalysisStep(0);
     if (analysis || analysisLoading) return;
     setAnalysisLoading(true);
     setAnalysisError(null);
