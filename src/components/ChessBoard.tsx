@@ -653,124 +653,152 @@ export function ChessBoard() {
         </div>
       )}
 
-      {/* Coach analysis modal */}
-      {showCoach && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-border">
-              <div>
-                <h2 className="text-xl font-bold text-card-foreground">AI Coach</h2>
-                <p className="text-xs text-muted-foreground">{resultText}</p>
+      {/* Inline coach analysis panel */}
+      {analysisMode && (
+        <div className="w-full max-w-2xl bg-card border border-border rounded-2xl shadow-lg flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div>
+              <h2 className="text-lg font-bold text-card-foreground">AI Coach</h2>
+              <p className="text-xs text-muted-foreground">{resultText}</p>
+            </div>
+            {analysisView?.currentMove && (
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1">
+                  <span
+                    className="inline-block w-3 h-3 rounded-sm"
+                    style={{ background: "var(--board-last)", boxShadow: "inset 0 0 0 2px var(--board-best)" }}
+                  />
+                  Played
+                </span>
+                {analysisView.better && (
+                  <span className="flex items-center gap-1">
+                    <span
+                      className="inline-block w-3 h-3 rounded-sm"
+                      style={{ background: "var(--board-suggest)" }}
+                    />
+                    Better
+                  </span>
+                )}
               </div>
-              <button
-                onClick={() => setShowCoach(false)}
-                className="text-muted-foreground hover:text-foreground text-2xl leading-none px-2"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
+            )}
+          </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
-              {analysisLoading && (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <p className="text-sm text-muted-foreground">Coach is reviewing your game…</p>
-                </div>
-              )}
-              {analysisError && !analysisLoading && (
-                <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-md p-4 text-sm">
-                  {analysisError}
-                  <button
-                    onClick={() => { setAnalysis(null); setAnalysisError(null); runAnalysis(); }}
-                    className="ml-2 underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-              {analysis && (
-                <div className="space-y-4">
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">
-                      Summary
-                    </h3>
-                    <p className="text-sm text-card-foreground">{analysis.summary}</p>
+          <div className="p-4 space-y-3">
+            {analysisLoading && (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-muted-foreground">Coach is reviewing your game…</p>
+              </div>
+            )}
+            {analysisError && !analysisLoading && (
+              <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-md p-3 text-sm">
+                {analysisError}
+                <button
+                  onClick={() => { setAnalysis(null); setAnalysisError(null); runAnalysis(); }}
+                  className="ml-2 underline"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {analysis && analysisView?.currentMove && (() => {
+              const m = analysisView.currentMove;
+              const qColor: Record<CoachMove["quality"], string> = {
+                brilliant: "bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/40",
+                best: "bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/40",
+                good: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40",
+                inaccuracy: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border-yellow-500/40",
+                mistake: "bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-500/40",
+                blunder: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40",
+              };
+              return (
+                <div
+                  className={`rounded-lg p-3 border ${
+                    m.isKey
+                      ? "border-primary/60 bg-primary/5 ring-1 ring-primary/30"
+                      : "border-border bg-background/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-mono text-muted-foreground">
+                        {Math.ceil(m.moveNumber / 2)}.{m.color === "black" ? ".." : ""}
+                      </span>
+                      <span className="font-mono font-semibold text-card-foreground">{m.san}</span>
+                      <span className="text-xs text-muted-foreground capitalize">({m.color})</span>
+                      {m.isKey && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
+                          Key
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${qColor[m.quality]}`}
+                    >
+                      {m.quality}
+                    </span>
                   </div>
-
-                  <div className="space-y-2">
-                    {analysis.moves.map((m, i) => {
-                      const qColor: Record<CoachMove["quality"], string> = {
-                        brilliant: "bg-purple-500/20 text-purple-300 border-purple-500/40",
-                        best: "bg-green-500/20 text-green-300 border-green-500/40",
-                        good: "bg-blue-500/20 text-blue-300 border-blue-500/40",
-                        inaccuracy: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40",
-                        mistake: "bg-orange-500/20 text-orange-300 border-orange-500/40",
-                        blunder: "bg-red-500/20 text-red-300 border-red-500/40",
-                      };
-                      return (
-                        <div
-                          key={i}
-                          className={`rounded-lg p-3 border ${
-                            m.isKey
-                              ? "border-primary/60 bg-primary/5 ring-1 ring-primary/30"
-                              : "border-border bg-background/40"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-mono text-muted-foreground">
-                                {Math.ceil(m.moveNumber / 2)}.{m.color === "black" ? ".." : ""}
-                              </span>
-                              <span className="font-mono font-semibold text-card-foreground">
-                                {m.san}
-                              </span>
-                              <span className="text-xs text-muted-foreground capitalize">
-                                ({m.color})
-                              </span>
-                              {m.isKey && (
-                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
-                                  Key
-                                </span>
-                              )}
-                            </div>
-                            <span
-                              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${qColor[m.quality]}`}
-                            >
-                              {m.quality}
-                            </span>
-                          </div>
-                          <p className="text-sm text-card-foreground/90">{m.explanation}</p>
-                          {m.betterMove && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Better:{" "}
-                              <span className="font-mono font-semibold text-foreground">
-                                {m.betterMove}
-                              </span>
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <p className="text-sm text-card-foreground/90">{m.explanation}</p>
+                  {m.betterMove && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Better:{" "}
+                      <span className="font-mono font-semibold text-foreground">{m.betterMove}</span>
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
 
-            <div className="p-5 border-t border-border flex gap-2">
-              <button
-                onClick={reset}
-                className="flex-1 px-4 py-2 text-sm font-semibold rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
-              >
-                New Match
-              </button>
-              <button
-                onClick={() => setShowCoach(false)}
-                className="px-4 py-2 text-sm font-semibold rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity"
-              >
-                Close
-              </button>
-            </div>
+            {analysis && !analysisView?.currentMove && (
+              <div className="bg-muted/50 rounded-lg p-3">
+                <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                  Summary
+                </h3>
+                <p className="text-sm text-card-foreground">{analysis.summary}</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Use ← → to step through every move.
+                </p>
+              </div>
+            )}
+
+            {analysis && (
+              <div className="border-t border-border pt-3">
+                <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                  All moves
+                </h3>
+                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                  {analysis.moves.map((mv, i) => {
+                    const isCurrent = analysisStep === i + 1;
+                    const dotColor: Record<CoachMove["quality"], string> = {
+                      brilliant: "bg-purple-500",
+                      best: "bg-green-500",
+                      good: "bg-blue-500",
+                      inaccuracy: "bg-yellow-500",
+                      mistake: "bg-orange-500",
+                      blunder: "bg-red-500",
+                    };
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setAnalysisStep(i + 1)}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-colors ${
+                          isCurrent
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-secondary text-secondary-foreground hover:opacity-80"
+                        } ${mv.isKey ? "ring-1 ring-primary/60" : ""}`}
+                        title={mv.explanation}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor[mv.quality]}`} />
+                        {Math.ceil(mv.moveNumber / 2)}
+                        {mv.color === "black" ? "…" : "."}
+                        {mv.san}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
