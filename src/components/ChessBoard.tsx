@@ -242,7 +242,7 @@ export function ChessBoard() {
         if (tryMove) better = { from: tryMove.from, to: tryMove.to, san: tryMove.san };
       }
     }
-    return { board: c.board(), played, better, currentMove: analysisStep > 0 ? analysis.moves[analysisStep - 1] : null };
+    return { board: c.board(), fen: c.fen(), played, better, currentMove: analysisStep > 0 ? analysis.moves[analysisStep - 1] : null };
   }, [analysisMode, analysis, analysisStep]);
 
   const board = analysisView ? analysisView.board : liveBoard;
