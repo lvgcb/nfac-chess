@@ -1,1 +1,4 @@
 project_id = "ncsvpjrcvaxzcdkornpa"
+
+[functions.analyze-game]
+verify_jwt = false
