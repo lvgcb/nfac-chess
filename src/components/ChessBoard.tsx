@@ -468,6 +468,12 @@ export function ChessBoard() {
               const isLast = lastMove && (lastMove.from === sq || lastMove.to === sq);
               const isCheck = checkedKing === sq;
               const hasEnemy = isTarget && piece;
+              const aPlayedFrom = analysisView?.played?.from === sq;
+              const aPlayedTo = analysisView?.played?.to === sq;
+              const aBetterFrom = analysisView?.better?.from === sq;
+              const aBetterTo = analysisView?.better?.to === sq;
+              const aPlayed = aPlayedFrom || aPlayedTo;
+              const aBetter = aBetterFrom || aBetterTo;
 
               return (
                 <button
@@ -479,11 +485,29 @@ export function ChessBoard() {
                     cursor: gameOver || turn !== playerColor ? "default" : "pointer",
                   }}
                 >
-                  {isLast && (
+                  {isLast && !analysisMode && (
                     <div className="absolute inset-0" style={{ background: "var(--board-last)" }} />
                   )}
-                  {isSelected && (
+                  {isSelected && !analysisMode && (
                     <div className="absolute inset-0" style={{ background: "var(--board-highlight)" }} />
+                  )}
+                  {aPlayed && (
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background: "var(--board-last)",
+                        boxShadow: aPlayedTo ? "inset 0 0 0 3px var(--board-best)" : undefined,
+                      }}
+                    />
+                  )}
+                  {aBetter && !aPlayed && (
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        boxShadow: "inset 0 0 0 3px var(--board-suggest)",
+                        background: aBetterTo ? "var(--board-suggest)" : undefined,
+                      }}
+                    />
                   )}
                   {isCheck && (
                     <div
