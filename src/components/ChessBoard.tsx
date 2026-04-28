@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square, type Move, type Color, type PieceSymbol } from "chess.js";
+import { supabase } from "@/integrations/supabase/client";
+
+type CoachMove = {
+  moveNumber: number;
+  san: string;
+  color: "white" | "black";
+  explanation: string;
+  quality: "brilliant" | "best" | "good" | "inaccuracy" | "mistake" | "blunder";
+  betterMove?: string | null;
+  isKey: boolean;
+};
+type CoachAnalysis = { summary: string; moves: CoachMove[] };
 
 const PIECES: Record<Color, Record<PieceSymbol, string>> = {
   w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
