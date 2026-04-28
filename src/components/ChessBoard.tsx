@@ -574,26 +574,57 @@ export function ChessBoard() {
         </div>
 
         <div className="flex gap-2 mt-2 flex-wrap justify-center">
-          <button
-            onClick={reset}
-            className="px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
-          >
-            New Game
-          </button>
-          <button
-            onClick={undo}
-            disabled={history.length < 2 || thinking || gameOver}
-            className="px-4 py-2 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Undo
-          </button>
-          {gameOver && (
+          {!analysisMode && (
+            <button
+              onClick={reset}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+            >
+              New Game
+            </button>
+          )}
+          {!analysisMode && gameOver && (
             <button
               onClick={runAnalysis}
               className="px-4 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity"
             >
               {analysis ? "View Analysis" : "Analyze Game"}
             </button>
+          )}
+          {analysisMode && (
+            <>
+              <button
+                onClick={() => setAnalysisStep((s) => Math.max(0, s - 1))}
+                disabled={analysisStep === 0}
+                className="px-3 py-2 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+                aria-label="Previous move"
+              >
+                ←
+              </button>
+              <button
+                onClick={() =>
+                  setAnalysisStep((s) =>
+                    Math.min(analysis?.moves.length ?? s, s + 1),
+                  )
+                }
+                disabled={!analysis || analysisStep >= analysis.moves.length}
+                className="px-3 py-2 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+                aria-label="Next move"
+              >
+                →
+              </button>
+              <button
+                onClick={reset}
+                className="px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              >
+                New Match
+              </button>
+              <button
+                onClick={() => setAnalysisMode(false)}
+                className="px-4 py-2 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity"
+              >
+                Exit Analysis
+              </button>
+            </>
           )}
         </div>
       </div>
