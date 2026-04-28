@@ -399,16 +399,9 @@ export function ChessBoard() {
 
   return (
     <div className="w-full min-h-screen flex flex-col items-center px-4 py-6 gap-6">
-      {/* Header: title + difficulty (top, centered) + theme toggle */}
-      <div className="flex flex-col items-center gap-3 w-full max-w-3xl relative">
-        <button
-          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-          className="absolute right-0 top-0 w-9 h-9 rounded-full bg-card border border-border shadow-sm flex items-center justify-center text-base hover:bg-secondary transition-colors"
-          aria-label="Toggle theme"
-          title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-        >
-          {theme === "dark" ? "☀️" : "🌙"}
-        </button>
+      {/* Header: title + difficulty (top, centered) */}
+      <div className="flex flex-col items-center gap-3 w-full max-w-3xl">
+
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Chess vs AI</h1>
         <div className="flex items-center gap-1 rounded-full bg-card border border-border p-1 shadow-sm">
           {(["easy", "medium", "hard"] as Difficulty[]).map((d) => (
