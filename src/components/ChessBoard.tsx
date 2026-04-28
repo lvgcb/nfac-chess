@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square, type Move, type Color, type PieceSymbol } from "chess.js";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { ExplorationBoard } from "@/components/ExplorationBoard";
 
 type CoachMove = {
   moveNumber: number;
