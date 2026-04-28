@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square, type Move, type Color, type PieceSymbol } from "chess.js";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { ExplorationBoard } from "@/components/ExplorationBoard";
 
 type CoachMove = {
   moveNumber: number;
@@ -203,24 +205,13 @@ export function ChessBoard() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisMode, setAnalysisMode] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0); // index into analysis.moves (0 = before any move)
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [coinsAwarded, setCoinsAwarded] = useState<number | null>(null);
+  const { user } = useAuth();
   const playerColor: Color = "w";
   const aiTimer = useRef<number | null>(null);
   const endHandled = useRef(false);
 
-  // Theme init + sync
-  useEffect(() => {
-    try {
-      const saved = (localStorage.getItem("theme") as "light" | "dark" | null) ?? "dark";
-      setTheme(saved);
-    } catch {/* ignore */}
-  }, []);
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") root.classList.add("dark");
-    else root.classList.remove("dark");
-    try { localStorage.setItem("theme", theme); } catch {/* ignore */}
-  }, [theme]);
+
 
   const liveBoard = useMemo(() => chess.board(), [fen, chess]);
   const inCheck = chess.inCheck();
@@ -251,7 +242,7 @@ export function ChessBoard() {
         if (tryMove) better = { from: tryMove.from, to: tryMove.to, san: tryMove.san };
       }
     }
-    return { board: c.board(), played, better, currentMove: analysisStep > 0 ? analysis.moves[analysisStep - 1] : null };
+    return { board: c.board(), fen: c.fen(), played, better, currentMove: analysisStep > 0 ? analysis.moves[analysisStep - 1] : null };
   }, [analysisMode, analysis, analysisStep]);
 
   const board = analysisView ? analysisView.board : liveBoard;
@@ -357,13 +348,33 @@ export function ChessBoard() {
     };
   }, [fen, turn, gameOver, difficulty, chess, applyMove]);
 
-  // Trigger end-game modal
+  // Trigger end-game modal + award coins
   useEffect(() => {
-    if (gameOver && !endHandled.current) {
-      endHandled.current = true;
-      setShowEndModal(true);
+    if (!gameOver || endHandled.current) return;
+    endHandled.current = true;
+    setShowEndModal(true);
+
+    if (!user) return;
+    // Determine outcome from white's perspective (player is white)
+    let amount = 0;
+    let reason = "";
+    if (chess.isCheckmate()) {
+      const winnerIsWhite = turn === "b"; // side to move lost
+      if (winnerIsWhite) {
+        amount = difficulty === "hard" ? 200 : difficulty === "medium" ? 100 : 50;
+        reason = `win_${difficulty}`;
+      } else {
+        amount = 0; // no coins for losing
+      }
+    } else if (chess.isDraw() || chess.isStalemate()) {
+      amount = 25;
+      reason = `draw_${difficulty}`;
     }
-  }, [gameOver]);
+    if (amount > 0) {
+      supabase.rpc("award_coins", { _amount: amount, _reason: reason, _metadata: {} })
+        .then(({ error }) => { if (!error) setCoinsAwarded(amount); });
+    }
+  }, [gameOver, user, chess, turn, difficulty]);
 
   const reset = () => {
     chess.reset();
@@ -378,8 +389,10 @@ export function ChessBoard() {
     setAnalysisError(null);
     setAnalysisMode(false);
     setAnalysisStep(0);
+    setCoinsAwarded(null);
     endHandled.current = false;
   };
+
 
   const runAnalysis = async () => {
     setShowEndModal(false);
@@ -408,16 +421,9 @@ export function ChessBoard() {
 
   return (
     <div className="w-full min-h-screen flex flex-col items-center px-4 py-6 gap-6">
-      {/* Header: title + difficulty (top, centered) + theme toggle */}
-      <div className="flex flex-col items-center gap-3 w-full max-w-3xl relative">
-        <button
-          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-          className="absolute right-0 top-0 w-9 h-9 rounded-full bg-card border border-border shadow-sm flex items-center justify-center text-base hover:bg-secondary transition-colors"
-          aria-label="Toggle theme"
-          title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-        >
-          {theme === "dark" ? "☀️" : "🌙"}
-        </button>
+      {/* Header: title + difficulty (top, centered) */}
+      <div className="flex flex-col items-center gap-3 w-full max-w-3xl">
+
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Chess vs AI</h1>
         <div className="flex items-center gap-1 rounded-full bg-card border border-border p-1 shadow-sm">
           {(["easy", "medium", "hard"] as Difficulty[]).map((d) => (
@@ -634,7 +640,15 @@ export function ChessBoard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-md w-full p-6 text-center">
             <h2 className="text-2xl font-bold text-card-foreground mb-2">Game Over</h2>
-            <p className="text-muted-foreground mb-6">{resultText}</p>
+            <p className="text-muted-foreground mb-3">{resultText}</p>
+            {coinsAwarded !== null && coinsAwarded > 0 && (
+              <p className="mb-4 inline-block px-3 py-1.5 rounded-full bg-accent/30 text-accent-foreground border border-accent/40 text-sm font-semibold">
+                🪙 +{coinsAwarded} coins earned!
+              </p>
+            )}
+            {!user && (
+              <p className="mb-4 text-xs text-muted-foreground">Sign in to earn coins for wins.</p>
+            )}
             <div className="flex flex-col gap-2">
               <button
                 onClick={runAnalysis}
@@ -655,7 +669,7 @@ export function ChessBoard() {
 
       {/* Inline coach analysis panel */}
       {analysisMode && (
-        <div className="w-full max-w-2xl bg-card border border-border rounded-2xl shadow-lg flex flex-col">
+        <div className="w-full max-w-4xl bg-card border border-border rounded-2xl shadow-lg flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div>
               <h2 className="text-lg font-bold text-card-foreground">AI Coach</h2>
@@ -683,7 +697,18 @@ export function ChessBoard() {
             )}
           </div>
 
-          <div className="p-4 space-y-3">
+          <div className="p-4 grid md:grid-cols-2 gap-4">
+            {/* Exploration board — try variations from the current position */}
+            {analysisView && (
+              <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-background/40 border border-border">
+                <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  Exploration board
+                </h3>
+                <ExplorationBoard fen={analysisView.fen} resetKey={analysisStep} />
+              </div>
+            )}
+
+            <div className="space-y-3">
             {analysisLoading && (
               <div className="flex flex-col items-center justify-center py-8 gap-3">
                 <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -799,6 +824,7 @@ export function ChessBoard() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
