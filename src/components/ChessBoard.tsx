@@ -816,6 +816,7 @@ export function ChessBoard() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
