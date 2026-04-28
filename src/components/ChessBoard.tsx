@@ -211,19 +211,7 @@ export function ChessBoard() {
   const aiTimer = useRef<number | null>(null);
   const endHandled = useRef(false);
 
-  // Theme init + sync
-  useEffect(() => {
-    try {
-      const saved = (localStorage.getItem("theme") as "light" | "dark" | null) ?? "dark";
-      setTheme(saved);
-    } catch {/* ignore */}
-  }, []);
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") root.classList.add("dark");
-    else root.classList.remove("dark");
-    try { localStorage.setItem("theme", theme); } catch {/* ignore */}
-  }, [theme]);
+
 
   const liveBoard = useMemo(() => chess.board(), [fen, chess]);
   const inCheck = chess.inCheck();
