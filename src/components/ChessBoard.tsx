@@ -198,13 +198,29 @@ export function ChessBoard() {
   const [history, setHistory] = useState<string[]>([]);
   const [captured, setCaptured] = useState<{ w: PieceSymbol[]; b: PieceSymbol[] }>({ w: [], b: [] });
   const [showEndModal, setShowEndModal] = useState(false);
-  const [showCoach, setShowCoach] = useState(false);
   const [analysis, setAnalysis] = useState<CoachAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisMode, setAnalysisMode] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState(0); // index into analysis.moves (0 = before any move)
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const playerColor: Color = "w";
   const aiTimer = useRef<number | null>(null);
   const endHandled = useRef(false);
+
+  // Theme init + sync
+  useEffect(() => {
+    try {
+      const saved = (localStorage.getItem("theme") as "light" | "dark" | null) ?? "dark";
+      setTheme(saved);
+    } catch {/* ignore */}
+  }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") root.classList.add("dark");
+    else root.classList.remove("dark");
+    try { localStorage.setItem("theme", theme); } catch {/* ignore */}
+  }, [theme]);
 
   const board = useMemo(() => chess.board(), [fen, chess]);
   const inCheck = chess.inCheck();
