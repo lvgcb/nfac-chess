@@ -197,13 +197,26 @@ export function ChessBoard() {
   const [thinking, setThinking] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [captured, setCaptured] = useState<{ w: PieceSymbol[]; b: PieceSymbol[] }>({ w: [], b: [] });
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [showCoach, setShowCoach] = useState(false);
+  const [analysis, setAnalysis] = useState<CoachAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const playerColor: Color = "w";
   const aiTimer = useRef<number | null>(null);
+  const endHandled = useRef(false);
 
   const board = useMemo(() => chess.board(), [fen, chess]);
   const inCheck = chess.inCheck();
   const turn = chess.turn();
   const gameOver = chess.isGameOver();
+
+  const resultText = useMemo(() => {
+    if (chess.isCheckmate()) return `Checkmate — ${turn === "w" ? "Black" : "White"} wins`;
+    if (chess.isStalemate()) return "Stalemate — Draw";
+    if (chess.isDraw()) return "Draw";
+    return "Game over";
+  }, [fen, chess, turn]);
 
   const status = useMemo(() => {
     if (chess.isCheckmate()) return `Checkmate — ${turn === "w" ? "Black" : "White"} wins`;
@@ -299,6 +312,14 @@ export function ChessBoard() {
     };
   }, [fen, turn, gameOver, difficulty, chess, applyMove]);
 
+  // Trigger end-game modal
+  useEffect(() => {
+    if (gameOver && !endHandled.current) {
+      endHandled.current = true;
+      setShowEndModal(true);
+    }
+  }, [gameOver]);
+
   const reset = () => {
     chess.reset();
     setFen(chess.fen());
@@ -307,11 +328,15 @@ export function ChessBoard() {
     setLastMove(null);
     setHistory([]);
     setCaptured({ w: [], b: [] });
+    setShowEndModal(false);
+    setShowCoach(false);
+    setAnalysis(null);
+    setAnalysisError(null);
+    endHandled.current = false;
   };
 
   const undo = () => {
     if (thinking) return;
-    // Undo AI move + player move
     chess.undo();
     chess.undo();
     setFen(chess.fen());
@@ -321,14 +346,60 @@ export function ChessBoard() {
     setHistory((h) => h.slice(0, Math.max(0, h.length - 2)));
   };
 
+  const runAnalysis = async () => {
+    setShowEndModal(false);
+    setShowCoach(true);
+    if (analysis || analysisLoading) return;
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-game", {
+        body: {
+          pgn: chess.pgn(),
+          moves: history,
+          result: resultText,
+        },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      setAnalysis(data as CoachAnalysis);
+    } catch (e) {
+      setAnalysisError(e instanceof Error ? e.message : "Failed to analyze game");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col lg:flex-row items-start justify-center gap-8 w-full max-w-6xl mx-auto p-4 lg:p-8">
-      {/* Board */}
-      <div className="flex flex-col items-center gap-3 flex-shrink-0">
-        <div className="flex items-center justify-between w-full px-1">
-          <div className="text-sm text-muted-foreground font-mono">
-            Black {captured.w.map((p, i) => <span key={i}>{PIECES.b[p]}</span>)}
-          </div>
+    <div className="w-full min-h-screen flex flex-col items-center px-4 py-6 gap-6">
+      {/* Header: title + difficulty (top, centered) */}
+      <div className="flex flex-col items-center gap-3 w-full max-w-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Chess vs AI</h1>
+        <div className="flex items-center gap-1 rounded-full bg-card border border-border p-1 shadow-sm">
+          {(["easy", "medium", "hard"] as Difficulty[]).map((d) => (
+            <button
+              key={d}
+              onClick={() => setDifficulty(d)}
+              className="px-4 py-1.5 text-sm font-medium rounded-full transition-colors capitalize"
+              style={{
+                background: difficulty === d ? "var(--primary)" : "transparent",
+                color:
+                  difficulty === d
+                    ? "var(--primary-foreground)"
+                    : "var(--muted-foreground)",
+              }}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground">{status}</p>
+      </div>
+
+      {/* Centered board */}
+      <div className="flex flex-col items-center gap-3">
+        <div className="text-sm text-muted-foreground font-mono min-h-5">
+          Black {captured.w.map((p, i) => <span key={i}>{PIECES.b[p]}</span>)}
         </div>
 
         <div
@@ -360,16 +431,10 @@ export function ChessBoard() {
                   }}
                 >
                   {isLast && (
-                    <div
-                      className="absolute inset-0"
-                      style={{ background: "var(--board-last)" }}
-                    />
+                    <div className="absolute inset-0" style={{ background: "var(--board-last)" }} />
                   )}
                   {isSelected && (
-                    <div
-                      className="absolute inset-0"
-                      style={{ background: "var(--board-highlight)" }}
-                    />
+                    <div className="absolute inset-0" style={{ background: "var(--board-highlight)" }} />
                   )}
                   {isCheck && (
                     <div
@@ -383,19 +448,13 @@ export function ChessBoard() {
                   {isTarget && !hasEnemy && (
                     <div
                       className="absolute rounded-full"
-                      style={{
-                        width: "30%",
-                        height: "30%",
-                        background: "var(--board-move)",
-                      }}
+                      style={{ width: "30%", height: "30%", background: "var(--board-move)" }}
                     />
                   )}
                   {hasEnemy && (
                     <div
                       className="absolute inset-1 rounded-full"
-                      style={{
-                        boxShadow: "inset 0 0 0 4px var(--board-move)",
-                      }}
+                      style={{ boxShadow: "inset 0 0 0 4px var(--board-move)" }}
                     />
                   )}
 
@@ -437,84 +496,180 @@ export function ChessBoard() {
           )}
         </div>
 
-        <div className="flex items-center justify-between w-full px-1">
-          <div className="text-sm text-muted-foreground font-mono">
-            White {captured.b.map((p, i) => <span key={i}>{PIECES.w[p]}</span>)}
-          </div>
+        <div className="text-sm text-muted-foreground font-mono min-h-5">
+          White {captured.b.map((p, i) => <span key={i}>{PIECES.w[p]}</span>)}
+        </div>
+
+        <div className="flex gap-2 mt-2 flex-wrap justify-center">
+          <button
+            onClick={reset}
+            className="px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            New Game
+          </button>
+          <button
+            onClick={undo}
+            disabled={history.length < 2 || thinking || gameOver}
+            className="px-4 py-2 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Undo
+          </button>
+          {gameOver && (
+            <button
+              onClick={runAnalysis}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity"
+            >
+              {analysis ? "View Analysis" : "Analyze Game"}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Sidebar */}
-      <div className="flex flex-col gap-4 w-full lg:w-72 flex-shrink-0">
-        <div className="rounded-xl border border-border bg-card p-5 shadow-lg">
-          <h1 className="text-xl font-bold tracking-tight text-card-foreground mb-1">
-            Chess vs AI
-          </h1>
-          <p className="text-sm text-muted-foreground mb-4">{status}</p>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                Difficulty
-              </label>
-              <div className="grid grid-cols-3 gap-1 mt-1.5">
-                {(["easy", "medium", "hard"] as Difficulty[]).map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setDifficulty(d)}
-                    className="px-2 py-1.5 text-xs font-medium rounded-md transition-colors capitalize"
-                    style={{
-                      background:
-                        difficulty === d ? "var(--primary)" : "var(--secondary)",
-                      color:
-                        difficulty === d
-                          ? "var(--primary-foreground)"
-                          : "var(--secondary-foreground)",
-                    }}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
+      {/* End-game modal */}
+      {showEndModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-md w-full p-6 text-center">
+            <h2 className="text-2xl font-bold text-card-foreground mb-2">Game Over</h2>
+            <p className="text-muted-foreground mb-6">{resultText}</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={runAnalysis}
+                className="w-full px-4 py-2.5 text-sm font-semibold rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              >
+                See Coach Analysis
+              </button>
               <button
                 onClick={reset}
-                className="px-3 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                className="w-full px-4 py-2.5 text-sm font-semibold rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity"
               >
-                New Game
-              </button>
-              <button
-                onClick={undo}
-                disabled={history.length < 2 || thinking}
-                className="px-3 py-2 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Undo
+                Start New Match
               </button>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="rounded-xl border border-border bg-card p-5 shadow-lg">
-          <h2 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3">
-            Move History
-          </h2>
-          <div className="max-h-72 overflow-y-auto font-mono text-sm space-y-1">
-            {history.length === 0 ? (
-              <p className="text-muted-foreground text-xs italic">No moves yet</p>
-            ) : (
-              Array.from({ length: Math.ceil(history.length / 2) }).map((_, i) => (
-                <div key={i} className="flex gap-3 text-card-foreground">
-                  <span className="text-muted-foreground w-6">{i + 1}.</span>
-                  <span className="w-16">{history[i * 2]}</span>
-                  <span className="w-16">{history[i * 2 + 1] ?? ""}</span>
+      {/* Coach analysis modal */}
+      {showCoach && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div>
+                <h2 className="text-xl font-bold text-card-foreground">AI Coach</h2>
+                <p className="text-xs text-muted-foreground">{resultText}</p>
+              </div>
+              <button
+                onClick={() => setShowCoach(false)}
+                className="text-muted-foreground hover:text-foreground text-2xl leading-none px-2"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              {analysisLoading && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-muted-foreground">Coach is reviewing your game…</p>
                 </div>
-              ))
-            )}
+              )}
+              {analysisError && !analysisLoading && (
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-md p-4 text-sm">
+                  {analysisError}
+                  <button
+                    onClick={() => { setAnalysis(null); setAnalysisError(null); runAnalysis(); }}
+                    className="ml-2 underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              {analysis && (
+                <div className="space-y-4">
+                  <div className="bg-muted/50 rounded-lg p-4">
+                    <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                      Summary
+                    </h3>
+                    <p className="text-sm text-card-foreground">{analysis.summary}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {analysis.moves.map((m, i) => {
+                      const qColor: Record<CoachMove["quality"], string> = {
+                        brilliant: "bg-purple-500/20 text-purple-300 border-purple-500/40",
+                        best: "bg-green-500/20 text-green-300 border-green-500/40",
+                        good: "bg-blue-500/20 text-blue-300 border-blue-500/40",
+                        inaccuracy: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40",
+                        mistake: "bg-orange-500/20 text-orange-300 border-orange-500/40",
+                        blunder: "bg-red-500/20 text-red-300 border-red-500/40",
+                      };
+                      return (
+                        <div
+                          key={i}
+                          className={`rounded-lg p-3 border ${
+                            m.isKey
+                              ? "border-primary/60 bg-primary/5 ring-1 ring-primary/30"
+                              : "border-border bg-background/40"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono text-muted-foreground">
+                                {Math.ceil(m.moveNumber / 2)}.{m.color === "black" ? ".." : ""}
+                              </span>
+                              <span className="font-mono font-semibold text-card-foreground">
+                                {m.san}
+                              </span>
+                              <span className="text-xs text-muted-foreground capitalize">
+                                ({m.color})
+                              </span>
+                              {m.isKey && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
+                                  Key
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${qColor[m.quality]}`}
+                            >
+                              {m.quality}
+                            </span>
+                          </div>
+                          <p className="text-sm text-card-foreground/90">{m.explanation}</p>
+                          {m.betterMove && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Better:{" "}
+                              <span className="font-mono font-semibold text-foreground">
+                                {m.betterMove}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-border flex gap-2">
+              <button
+                onClick={reset}
+                className="flex-1 px-4 py-2 text-sm font-semibold rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              >
+                New Match
+              </button>
+              <button
+                onClick={() => setShowCoach(false)}
+                className="px-4 py-2 text-sm font-semibold rounded-md bg-secondary text-secondary-foreground hover:opacity-90 transition-opacity"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
