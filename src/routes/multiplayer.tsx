@@ -35,6 +35,17 @@ type Match = {
   winner_id: string | null;
 };
 
+type CoachMove = {
+  moveNumber: number;
+  san: string;
+  color: "white" | "black";
+  explanation: string;
+  quality: "brilliant" | "best" | "good" | "inaccuracy" | "mistake" | "blunder";
+  betterMove?: string | null;
+  isKey: boolean;
+};
+type CoachAnalysis = { summary: string; moves: CoachMove[] };
+
 function MultiplayerPage() {
   const { user, loading: authLoading } = useAuth();
 
@@ -63,7 +74,6 @@ function MultiplayerInner({ userId }: { userId: string }) {
   const [queued, setQueued] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [settled, setSettled] = useState(false);
 
   // Resume any active match on mount
   useEffect(() => {
@@ -131,18 +141,12 @@ function MultiplayerInner({ userId }: { userId: string }) {
     setSearching(false);
   }, [userId]);
 
-  const handleNewMatch = useCallback(() => {
+  const handleNewMatch = useCallback(async () => {
     setMatch(null);
-    setSettled(false);
     setError(null);
-  }, []);
-
-  // Auto-settle finished match (award coins) — only the winner (or either side on draw) calls
-  useEffect(() => {
-    if (!match || match.status !== "finished" || settled) return;
-    setSettled(true);
-    // Already settled by whoever made the final move; nothing to do.
-  }, [match, settled]);
+    // Auto-join queue for the next match
+    await joinQueue();
+  }, [joinQueue]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -212,10 +216,18 @@ function LiveBoard({
   const [selected, setSelected] = useState<Square | null>(null);
   const [legalTargets, setLegalTargets] = useState<Square[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [view, setView] = useState<"board" | "analysis">("board");
   const finishedRef = useRef(false);
 
   const turn = game.turn();
   const myTurn = turn === myColor && match.status === "active";
+  const finished = match.status === "finished";
+
+  // Show end-game modal when match transitions to finished
+  useEffect(() => {
+    if (finished && view === "board") setShowEndModal(true);
+  }, [finished, view]);
 
   // Detect game over and settle once
   useEffect(() => {
@@ -223,7 +235,6 @@ function LiveBoard({
     if (finishedRef.current) return;
     let result: "white" | "black" | "draw" | null = null;
     if (game.isCheckmate()) {
-      // The side to move is checkmated — opposite color wins
       result = turn === "w" ? "black" : "white";
     } else if (game.isStalemate() || game.isDraw() || game.isThreefoldRepetition() || game.isInsufficientMaterial()) {
       result = "draw";
@@ -249,7 +260,6 @@ function LiveBoard({
               _move_san: mv.san,
             });
             if (!e) {
-              // optimistic local update; realtime will confirm
               onMatchUpdate({ ...match, fen: tmp.fen(), moves: [...match.moves, mv.san] });
             }
           }
@@ -278,11 +288,9 @@ function LiveBoard({
     await supabase.rpc("finish_match", { _match_id: match.id, _result: result });
   }, [match, isWhite]);
 
-  // Render board oriented so player is at bottom
   const ranks = isWhite ? RANKS : ([...RANKS].reverse() as readonly number[]);
   const files = isWhite ? FILES : ([...FILES].reverse() as readonly string[]);
 
-  const finished = match.status === "finished";
   let resultText = "";
   if (finished) {
     if (match.result === "draw") resultText = "Draw — no coins exchanged.";
@@ -290,8 +298,20 @@ function LiveBoard({
     else resultText = "You lost. -10 🪙";
   }
 
+  if (view === "analysis") {
+    return (
+      <AnalysisView
+        match={match}
+        userId={userId}
+        resultText={resultText}
+        onPlayAgain={onNewMatch}
+        onBackToBoard={() => setView("board")}
+      />
+    );
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
       <div className="flex items-center justify-between text-sm">
         <div>
           <div className="font-semibold text-foreground">{opponentName}</div>
@@ -351,13 +371,10 @@ function LiveBoard({
             Resign
           </button>
         )}
-        {finished && (
-          <>
-            <div className="w-full text-center text-base font-semibold text-foreground">{resultText}</div>
-            <button onClick={onNewMatch} className="px-5 py-2 rounded-md bg-primary text-primary-foreground font-semibold hover:opacity-90">
-              Find new match
-            </button>
-          </>
+        {finished && !showEndModal && (
+          <button onClick={() => setShowEndModal(true)} className="px-4 py-2 rounded-md bg-secondary text-secondary-foreground hover:opacity-90 text-sm font-medium">
+            Show result
+          </button>
         )}
       </div>
 
@@ -370,6 +387,242 @@ function LiveBoard({
             ))}
           </div>
         </div>
+      )}
+
+      {showEndModal && finished && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-6 space-y-5 text-center">
+            <div className="text-5xl">
+              {match.result === "draw" ? "🤝" : match.winner_id === userId ? "🏆" : "😞"}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">
+                {match.result === "draw" ? "It's a draw" : match.winner_id === userId ? "Victory!" : "Defeat"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">{resultText}</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                onClick={() => { setShowEndModal(false); onNewMatch(); }}
+                className="flex-1 px-4 py-2.5 rounded-md bg-primary text-primary-foreground font-semibold hover:opacity-90"
+              >
+                Play again
+              </button>
+              <button
+                onClick={() => { setShowEndModal(false); setView("analysis"); }}
+                className="flex-1 px-4 py-2.5 rounded-md bg-secondary text-secondary-foreground font-semibold hover:opacity-90"
+              >
+                See AI analysis
+              </button>
+            </div>
+            <button
+              onClick={() => setShowEndModal(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalysisView({
+  match,
+  userId,
+  resultText,
+  onPlayAgain,
+  onBackToBoard,
+}: {
+  match: Match;
+  userId: string;
+  resultText: string;
+  onPlayAgain: () => void;
+  onBackToBoard: () => void;
+}) {
+  const [analysis, setAnalysis] = useState<CoachAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+
+  // Build PGN locally from moves
+  const pgn = useMemo(() => {
+    const g = new Chess();
+    for (const san of match.moves) {
+      try { g.move(san); } catch { /* skip */ }
+    }
+    return g.pgn();
+  }, [match.moves]);
+
+  // Reconstruct FEN at each step
+  const fenAtStep = useMemo(() => {
+    const g = new Chess();
+    const fens = [g.fen()];
+    for (const san of match.moves) {
+      try { g.move(san); fens.push(g.fen()); } catch { /* skip */ }
+    }
+    return fens;
+  }, [match.moves]);
+
+  const isWhite = match.white_id === userId;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setErr(null);
+      try {
+        const result =
+          match.result === "draw"
+            ? "Draw"
+            : match.winner_id
+              ? `${match.result === "white" ? "White" : "Black"} wins`
+              : "Unfinished";
+        const { data, error } = await supabase.functions.invoke("analyze-game", {
+          body: { pgn, moves: match.moves, result },
+        });
+        if (cancelled) return;
+        if (error) throw error;
+        if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+        setAnalysis(data as CoachAnalysis);
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : "Failed to analyze");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pgn, match.moves, match.result, match.winner_id]);
+
+  const currentFen = fenAtStep[Math.min(step, fenAtStep.length - 1)] ?? new Chess().fen();
+  const board = useMemo(() => {
+    const g = new Chess();
+    try { g.load(currentFen); } catch { /* ignore */ }
+    return g;
+  }, [currentFen]);
+
+  const ranks = isWhite ? RANKS : ([...RANKS].reverse() as readonly number[]);
+  const files = isWhite ? FILES : ([...FILES].reverse() as readonly string[]);
+
+  const currentMove = analysis && step > 0 ? analysis.moves[step - 1] : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="text-lg font-bold text-foreground">AI Coach Analysis</h2>
+        <div className="flex gap-2">
+          <button onClick={onBackToBoard} className="px-3 py-1.5 rounded-md bg-secondary text-secondary-foreground text-sm hover:opacity-90">
+            Back to board
+          </button>
+          <button onClick={onPlayAgain} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90">
+            Play again
+          </button>
+        </div>
+      </div>
+
+      <div className="text-sm text-muted-foreground text-center">{resultText}</div>
+
+      <div className="mx-auto" style={{ maxWidth: 480 }}>
+        <div className="grid grid-cols-8 gap-0 border border-border rounded-md overflow-hidden shadow">
+          {ranks.map((rank) =>
+            files.map((file) => {
+              const sq = `${file}${rank}` as Square;
+              const piece = board.get(sq);
+              const isLight = (FILES.indexOf(file as typeof FILES[number]) + rank) % 2 === 1;
+              return (
+                <div
+                  key={sq}
+                  className="relative aspect-square flex items-center justify-center text-2xl sm:text-3xl select-none"
+                  style={{ background: isLight ? "var(--board-light, #f0d9b5)" : "var(--board-dark, #b58863)" }}
+                >
+                  {piece ? <span>{PIECES[piece.color][piece.type]}</span> : null}
+                </div>
+              );
+            }),
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={() => setStep((s) => Math.max(0, s - 1))}
+          disabled={step === 0}
+          className="px-3 py-1.5 rounded-md bg-secondary text-secondary-foreground text-sm disabled:opacity-40"
+        >
+          ← Prev
+        </button>
+        <span className="text-xs text-muted-foreground">
+          {step} / {match.moves.length}
+        </span>
+        <button
+          onClick={() => setStep((s) => Math.min(match.moves.length, s + 1))}
+          disabled={step >= match.moves.length}
+          className="px-3 py-1.5 rounded-md bg-secondary text-secondary-foreground text-sm disabled:opacity-40"
+        >
+          Next →
+        </button>
+      </div>
+
+      {loading && (
+        <div className="text-center text-sm text-muted-foreground py-4">Analyzing your game…</div>
+      )}
+      {err && (
+        <div className="text-center text-sm text-destructive py-4">{err}</div>
+      )}
+
+      {analysis && (
+        <>
+          <div className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
+            <div className="font-semibold mb-1">Summary</div>
+            <p className="text-muted-foreground">{analysis.summary}</p>
+          </div>
+
+          {currentMove && (
+            <div className={`rounded-md border p-3 text-sm ${currentMove.isKey ? "border-accent bg-accent/10" : "border-border bg-card"}`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-semibold text-foreground">
+                  {currentMove.moveNumber}. {currentMove.color === "white" ? "" : "…"}{currentMove.san}
+                  {currentMove.isKey && <span className="ml-2 text-xs text-accent-foreground">★ Key move</span>}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  currentMove.quality === "brilliant" || currentMove.quality === "best"
+                    ? "bg-primary/20 text-primary"
+                    : currentMove.quality === "good"
+                    ? "bg-secondary text-secondary-foreground"
+                    : "bg-destructive/20 text-destructive"
+                }`}>
+                  {currentMove.quality}
+                </span>
+              </div>
+              <p className="text-muted-foreground">{currentMove.explanation}</p>
+              {currentMove.betterMove && (
+                <p className="mt-1 text-xs text-foreground">
+                  💡 Better: <span className="font-mono font-semibold">{currentMove.betterMove}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-md border border-border bg-card p-3 max-h-64 overflow-y-auto">
+            <div className="font-semibold text-foreground text-sm mb-2">All moves</div>
+            <div className="grid grid-cols-1 gap-1 text-sm">
+              {analysis.moves.map((m, i) => (
+                <button
+                  key={i}
+                  onClick={() => setStep(i + 1)}
+                  className={`text-left px-2 py-1 rounded ${step === i + 1 ? "bg-secondary" : "hover:bg-secondary/50"} ${m.isKey ? "border-l-2 border-accent" : ""}`}
+                >
+                  <span className="font-mono text-xs text-muted-foreground mr-2">
+                    {m.moveNumber}.{m.color === "black" ? ".." : ""}
+                  </span>
+                  <span className="font-semibold text-foreground">{m.san}</span>
+                  {m.isKey && <span className="ml-2 text-xs text-accent-foreground">★</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
