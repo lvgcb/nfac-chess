@@ -640,7 +640,15 @@ export function ChessBoard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-md w-full p-6 text-center">
             <h2 className="text-2xl font-bold text-card-foreground mb-2">Game Over</h2>
-            <p className="text-muted-foreground mb-6">{resultText}</p>
+            <p className="text-muted-foreground mb-3">{resultText}</p>
+            {coinsAwarded !== null && coinsAwarded > 0 && (
+              <p className="mb-4 inline-block px-3 py-1.5 rounded-full bg-accent/30 text-accent-foreground border border-accent/40 text-sm font-semibold">
+                🪙 +{coinsAwarded} coins earned!
+              </p>
+            )}
+            {!user && (
+              <p className="mb-4 text-xs text-muted-foreground">Sign in to earn coins for wins.</p>
+            )}
             <div className="flex flex-col gap-2">
               <button
                 onClick={runAnalysis}
