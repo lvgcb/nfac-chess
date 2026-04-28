@@ -222,10 +222,39 @@ export function ChessBoard() {
     try { localStorage.setItem("theme", theme); } catch {/* ignore */}
   }, [theme]);
 
-  const board = useMemo(() => chess.board(), [fen, chess]);
+  const liveBoard = useMemo(() => chess.board(), [fen, chess]);
   const inCheck = chess.inCheck();
   const turn = chess.turn();
   const gameOver = chess.isGameOver();
+
+  // Compute analysis-mode position by replaying SAN moves up to analysisStep
+  const analysisView = useMemo(() => {
+    if (!analysisMode || !analysis) return null;
+    const c = new Chess();
+    let played: { from: Square; to: Square; san: string } | null = null;
+    for (let i = 0; i < analysisStep && i < analysis.moves.length; i++) {
+      const m = c.move(analysis.moves[i].san) as Move | null;
+      if (!m) break;
+      if (i === analysisStep - 1) played = { from: m.from, to: m.to, san: m.san };
+    }
+    // Compute "better move" arrow if the step's move suggested one
+    let better: { from: Square; to: Square; san: string } | null = null;
+    if (analysisStep > 0) {
+      const cur = analysis.moves[analysisStep - 1];
+      if (cur?.betterMove) {
+        // Roll back one move to evaluate the better alternative from same position
+        const sandbox = new Chess();
+        for (let i = 0; i < analysisStep - 1 && i < analysis.moves.length; i++) {
+          sandbox.move(analysis.moves[i].san);
+        }
+        const tryMove = sandbox.move(cur.betterMove) as Move | null;
+        if (tryMove) better = { from: tryMove.from, to: tryMove.to, san: tryMove.san };
+      }
+    }
+    return { board: c.board(), played, better, currentMove: analysisStep > 0 ? analysis.moves[analysisStep - 1] : null };
+  }, [analysisMode, analysis, analysisStep]);
+
+  const board = analysisView ? analysisView.board : liveBoard;
 
   const resultText = useMemo(() => {
     if (chess.isCheckmate()) return `Checkmate — ${turn === "w" ? "Black" : "White"} wins`;
