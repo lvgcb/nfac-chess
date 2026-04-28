@@ -689,7 +689,18 @@ export function ChessBoard() {
             )}
           </div>
 
-          <div className="p-4 space-y-3">
+          <div className="p-4 grid md:grid-cols-2 gap-4">
+            {/* Exploration board — try variations from the current position */}
+            {analysisView && (
+              <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-background/40 border border-border">
+                <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  Exploration board
+                </h3>
+                <ExplorationBoard fen={analysisView.fen} resetKey={analysisStep} />
+              </div>
+            )}
+
+            <div className="space-y-3">
             {analysisLoading && (
               <div className="flex flex-col items-center justify-center py-8 gap-3">
                 <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
