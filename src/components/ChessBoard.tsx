@@ -661,7 +661,7 @@ export function ChessBoard() {
 
       {/* Inline coach analysis panel */}
       {analysisMode && (
-        <div className="w-full max-w-2xl bg-card border border-border rounded-2xl shadow-lg flex flex-col">
+        <div className="w-full max-w-4xl bg-card border border-border rounded-2xl shadow-lg flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-border">
             <div>
               <h2 className="text-lg font-bold text-card-foreground">AI Coach</h2>
