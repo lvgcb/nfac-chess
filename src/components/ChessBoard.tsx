@@ -205,7 +205,8 @@ export function ChessBoard() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisMode, setAnalysisMode] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0); // index into analysis.moves (0 = before any move)
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [coinsAwarded, setCoinsAwarded] = useState<number | null>(null);
+  const { user } = useAuth();
   const playerColor: Color = "w";
   const aiTimer = useRef<number | null>(null);
   const endHandled = useRef(false);
